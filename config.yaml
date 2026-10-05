@@ -1,0 +1,70 @@
+# ─────────────────────────────────────────────────────────────
+# 경매 알리미 설정 파일
+# 토큰·비밀번호는 여기에 직접 쓰지 말고 ${환경변수} 로 넣으세요.
+# ─────────────────────────────────────────────────────────────
+
+# 이미 알린 물건 기록 (같은 물건 중복 알림 방지)
+state_file: data/seen.json
+
+# 1단계: 법원경매정보 사이트에서 가져올 범위 (서버 검색)
+search:
+  days_ahead: 14        # 오늘부터 며칠 뒤 매각기일까지 검색할지
+  page_size: 40
+  max_pages: 50         # query 하나당 최대 페이지 수
+  delay_seconds: 1.0    # 페이지 요청 사이 대기 시간 (서버 부담 방지)
+
+  # 여러 개를 쓰면 각각 검색한 뒤 합칩니다. 비워두면 전국 검색(양이 많음).
+  # sido_code: 법정동코드 앞 2자리
+  #   서울 11, 부산 26, 대구 27, 인천 28, 광주 29, 대전 30, 울산 31, 세종 36,
+  #   경기 41, 강원 51(구 42), 충북 43, 충남 44, 전북 52(구 45), 전남 46,
+  #   경북 47, 경남 48, 제주 50
+  # sigungu_code: 법정동코드 앞 5자리 (예: 서울 강남구 11680)
+  # 그 밖에 court_code, appraisal_min/max, min_price_min/max,
+  #   fail_count_min/max 도 서버 검색 조건으로 쓸 수 있습니다.
+  queries:
+    - sido_code: "11"   # 서울
+    - sido_code: "41"   # 경기
+
+  # 사이트 개편 등으로 요청 필드가 바뀌었을 때 직접 덮어쓰기 (보통은 비워둠)
+  extra_params: {}
+
+# 2단계: 내가 원하는 물건 조건 (여러 개 가능, 하나라도 맞으면 알림)
+# 모든 항목은 선택사항이며, 적은 항목은 모두 만족해야(AND) 합니다.
+#   address_keywords : 주소에 이 중 하나라도 포함
+#   usage_keywords   : 용도(아파트, 다세대, 오피스텔, 대지, 전 ...) 중 하나라도 포함
+#   exclude_keywords : 주소/용도/비고에 포함되면 제외 (예: 지분, 유치권)
+#   appraisal_min/max: 감정가 범위 (원)
+#   min_price_min/max: 최저매각가 범위 (원)
+#   fail_count_min   : 최소 유찰 횟수
+#   max_ratio        : 최저가/감정가 비율(%) 이하
+watches:
+  - name: 강남3구 아파트 (유찰 1회 이상)
+    address_keywords: [강남구, 서초구, 송파구]
+    usage_keywords: [아파트]
+    exclude_keywords: [지분, 유치권, 법정지상권]
+    fail_count_min: 1
+    min_price_max: 1500000000
+
+  - name: 경기 3억 이하 아파트 반값
+    address_keywords: [경기]
+    usage_keywords: [아파트]
+    exclude_keywords: [지분]
+    min_price_max: 300000000
+    max_ratio: 50
+
+# 알림 채널 (값이 비어 있는 채널은 자동으로 꺼집니다)
+notify:
+  console: true
+  telegram:
+    bot_token: ${TELEGRAM_BOT_TOKEN}
+    chat_id: ${TELEGRAM_CHAT_ID}
+  email:
+    host: ${SMTP_HOST}          # 네이버: smtp.naver.com, 지메일: smtp.gmail.com
+    port: 465
+    username: ${SMTP_USER}
+    password: ${SMTP_PASSWORD}  # 네이버/지메일은 '앱 비밀번호' 사용
+    to: ${MAIL_TO}
+  discord:
+    webhook_url: ${DISCORD_WEBHOOK_URL}
+  slack:
+    webhook_url: ${SLACK_WEBHOOK_URL}
