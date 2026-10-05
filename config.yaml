@@ -24,10 +24,8 @@ search:
   # 그 밖에 appraisal_min/max, min_price_min/max, fail_count_min/max 도
   #   서버 검색 조건으로 쓸 수 있습니다 (검색량이 줄어 빨라짐).
   queries:
-    - sido_code: "11"     # 서울
+    - sido_code: "27"     # 대구
       usage_large: "20000"  # 건물
-    - sido_code: "41"     # 경기
-      usage_large: "20000"
 
   # 사이트 개편 등으로 요청 필드가 바뀌었을 때 직접 덮어쓰기 (보통은 비워둠)
   extra_params: {}
@@ -51,10 +49,10 @@ search:
 #   area_min/max     : 면적(㎡) 범위 (예: 59 ~ 85)
 #   sale_within_days : 매각기일이 오늘부터 N일 안인 것만
 watches:
-  - name: 강남3구 아파트 (유찰 1회 이상)
-    address_keywords: [강남구, 서초구, 송파구]
+  - name: 대구 아파트
+    address_keywords: [대구]
     usage_keywords: [아파트]
-    exclude_risks: &safe
+    exclude_risks:
       - 대항력임차인
       - 선순위권리
       - 지분매각
@@ -64,18 +62,10 @@ watches:
       - 토지별도등기
       - 위반건축물
       - 재매각
-    fail_count_min: 1
-    min_price_max: 1500000000
-    # area_min: 59
-    # area_max: 85
-
-  - name: 경기 3억 이하 아파트 반값
-    address_keywords: [경기]
-    usage_keywords: [아파트]
-    exclude_risks: *safe        # 위와 같은 위험 제외 목록 사용
-    min_price_max: 300000000
-    max_ratio: 50
-    # area_min: 59
+    # 필요하면 아래 조건의 # 을 지우고 값을 바꾸세요
+    # min_price_max: 300000000   # 최저가 3억 이하
+    # fail_count_min: 1          # 1회 이상 유찰
+    # area_min: 59               # 59~85㎡
     # area_max: 85
 
 # 알림 채널 (값이 비어 있는 채널은 자동으로 꺼집니다)
