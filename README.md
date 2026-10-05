@@ -58,6 +58,24 @@ python -m kyungmae
 - **Windows** — 작업 스케줄러 → 기본 작업 만들기 → 매일 08:00 →
   프로그램 `python`, 인수 `-m kyungmae`, 시작 위치 `C:\경로\kyungmae`
 
+## 텔레그램으로 받기 (단계별)
+
+1. 텔레그램에서 **@BotFather** 검색 → 대화 시작 → `/newbot` 입력
+2. 봇 이름(예: `내 경매 알리미`)과 아이디(`_bot`으로 끝나야 함, 예: `my_kyungmae_bot`)를 입력하면
+   **토큰**(예: `123456789:ABC-...`)을 알려줍니다.
+3. 방금 만든 봇을 검색해서 **시작(Start)** 을 누르고 아무 메시지나 보냅니다.
+4. 브라우저에서 `https://api.telegram.org/bot<토큰>/getUpdates` 를 열어
+   `"chat":{"id":123456789` 부분의 숫자가 **chat ID** 입니다.
+5. GitHub 저장소 → Settings → Secrets and variables → Actions → **New repository secret**
+   - `TELEGRAM_BOT_TOKEN` = 2번의 토큰
+   - `TELEGRAM_CHAT_ID` = 4번의 숫자
+6. Actions 탭 → "경매 알리미 (매일)" → **Run workflow** → 실행 방식 선택
+   - `test-notify`: 테스트 메시지만 보냄 (먼저 이걸로 확인)
+   - `resend`: 이미 알린 물건도 포함해 지금 조건에 맞는 물건을 모두 보냄
+   - `normal`: 새 물건만 보냄 (매일 자동 실행과 동일)
+
+> 토큰은 비밀번호와 같으니 채팅이나 코드에 붙여넣지 말고 GitHub Secrets 에만 넣으세요.
+
 ## 알림 채널 설정
 
 | 채널 | 준비 방법 |

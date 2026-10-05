@@ -181,3 +181,25 @@ def test_ratio_and_court_and_fail_max():
     assert Watch(name="b", courts=["서울중앙"]).matches(item)
     assert not Watch(name="c", courts=["수원"]).matches(item)
     assert not Watch(name="d", fail_count_max=0).matches(item)
+
+
+def test_resend_includes_seen(tmp_path, monkeypatch, capsys):
+    def fake_search(self, criteria, max_pages=50):
+        yield RAW
+
+    monkeypatch.setattr(CourtAuctionClient, "search", fake_search)
+    cfg = {
+        "state_file": str(tmp_path / "seen.json"),
+        "watches": [{"name": "강남", "address_keywords": ["강남구"]}],
+        "notify": {"console": True},
+    }
+    main_mod.run(cfg)
+    capsys.readouterr()
+    main_mod.run(cfg, resend=True)
+    assert "2025타경1234" in capsys.readouterr().out
+
+
+def test_test_notify_without_channel(tmp_path):
+    cfg_path = tmp_path / "c.yaml"
+    cfg_path.write_text("watches: [{name: a}]\nnotify: {console: true}\n", encoding="utf-8")
+    assert main_mod.main(["-c", str(cfg_path), "--test-notify"]) == 1
