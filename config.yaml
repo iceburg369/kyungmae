@@ -9,8 +9,8 @@ state_file: data/seen.json
 # 1단계: 법원경매정보 사이트에서 가져올 범위 (서버 검색)
 search:
   days_ahead: 14        # 오늘부터 며칠 뒤 매각기일까지 검색할지
-  page_size: 40
-  max_pages: 50         # query 하나당 최대 페이지 수
+  page_size: 40         # 10, 20, 40 만 허용됨
+  max_pages: 300        # query 하나당 최대 페이지 수 (40건 x 300 = 12,000건)
   delay_seconds: 1.0    # 페이지 요청 사이 대기 시간 (서버 부담 방지)
 
   # 여러 개를 쓰면 각각 검색한 뒤 합칩니다. 비워두면 전국 검색(양이 많음).
@@ -18,12 +18,16 @@ search:
   #   서울 11, 부산 26, 대구 27, 인천 28, 광주 29, 대전 30, 울산 31, 세종 36,
   #   경기 41, 강원 51(구 42), 충북 43, 충남 44, 전북 52(구 45), 전남 46,
   #   경북 47, 경남 48, 제주 50
-  # sigungu_code: 법정동코드 앞 5자리 (예: 서울 강남구 11680)
-  # 그 밖에 court_code, appraisal_min/max, min_price_min/max,
-  #   fail_count_min/max 도 서버 검색 조건으로 쓸 수 있습니다.
+  # court_code: 법원 코드 (예: 서울중앙지방법원 B000210)
+  # usage_large: 용도 대분류 (토지 10000, 건물 20000)
+  #   usage_mid / usage_small 예: 주거용건물 20100 / 아파트 20104
+  # 그 밖에 appraisal_min/max, min_price_min/max, fail_count_min/max 도
+  #   서버 검색 조건으로 쓸 수 있습니다 (검색량이 줄어 빨라짐).
   queries:
-    - sido_code: "11"   # 서울
-    - sido_code: "41"   # 경기
+    - sido_code: "11"     # 서울
+      usage_large: "20000"  # 건물
+    - sido_code: "41"     # 경기
+      usage_large: "20000"
 
   # 사이트 개편 등으로 요청 필드가 바뀌었을 때 직접 덮어쓰기 (보통은 비워둠)
   extra_params: {}
