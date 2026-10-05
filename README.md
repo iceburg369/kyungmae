@@ -85,6 +85,23 @@ python -m kyungmae
 | 디스코드 | 채널 설정 → 연동 → 웹후크 만들기 → URL 복사 |
 | 슬랙 | Incoming Webhooks 앱 추가 → URL 복사 |
 
+## 지역 설정
+
+`config.yaml` 맨 위의 `regions`에 지역 이름을 적으면 됩니다. 여러 개 가능합니다.
+
+```yaml
+regions:
+  - 대구                 # 대구 전체
+  - 부산 해운대구         # 부산 해운대구만
+  - 경기 수원시 영통구     # 수원시 영통구만
+```
+
+- 사용 가능한 시도: 서울 부산 대구 인천 광주 대전 울산 세종 경기 강원 충북 충남 전북 전남 경북 경남 제주
+  (`대구광역시`, `경기도`처럼 정식 이름도 됩니다)
+- GitHub 웹에서 바로 고치기: 저장소에서 `config.yaml` 열기 → 연필(✏️) 아이콘 → `regions` 수정 → **Commit changes**
+- **한 번만 다른 지역 보기**: Actions → "경매 알리미 (매일)" → Run workflow →
+  `regions` 칸에 `부산, 울산`처럼 입력 (config.yaml은 바뀌지 않음)
+
 ## 조건 작성 예시
 
 ```yaml

@@ -21,6 +21,7 @@ import yaml
 from .client import CourtAuctionClient, parse_item
 from .filters import Watch
 from .notifier import ConsoleNotifier, build_notifiers, format_message, notify_all
+from .regions import parse_regions
 from .store import SeenStore
 
 log = logging.getLogger("kyungmae")
@@ -52,11 +53,24 @@ def load_config(path: str | Path) -> dict:
     return cfg
 
 
-def run(cfg: dict, dry_run: bool = False, dump: str | None = None, resend: bool = False) -> int:
+def run(
+    cfg: dict,
+    dry_run: bool = False,
+    dump: str | None = None,
+    resend: bool = False,
+    regions_override: str | None = None,
+) -> int:
     search_cfg = cfg.get("search") or {}
     days_ahead = int(search_cfg.get("days_ahead", 14))
-    queries = search_cfg.get("queries") or [{}]
     extra = search_cfg.get("extra_params") or {}
+    max_pages = int(search_cfg.get("max_pages", 50))
+
+    # 지역: 실행 시 지정한 값 > config 의 regions > search.queries(직접 코드 지정)
+    regions = parse_regions(regions_override or cfg.get("regions"))
+    if regions:
+        common = search_cfg.get("common") or {}
+        log.info("조회 지역: %s", ", ".join(r.label for r in regions))
+    queries = search_cfg.get("queries") or [{}]
 
     client = CourtAuctionClient(
         delay=float(search_cfg.get("delay_seconds", 1.0)),
@@ -67,13 +81,33 @@ def run(cfg: dict, dry_run: bool = False, dump: str | None = None, resend: bool 
 
     raw_rows: list[dict] = []
     items = {}
-    for q in queries:
-        criteria = client.build_criteria(days_ahead=days_ahead, extra=extra, **q)
-        for raw in client.search(criteria, max_pages=int(search_cfg.get("max_pages", 50))):
+
+    def collect(criteria: dict) -> int:
+        n = 0
+        for raw in client.search(criteria, max_pages=max_pages):
             raw_rows.append(raw)
             item = parse_item(raw)
-            items[item.uid] = item  # 여러 query 에 중복으로 걸린 물건 제거
-    log.info("검색된 물건 %d건", len(items))
+            items[item.uid] = item  # 여러 검색에 중복으로 걸린 물건 제거
+            n += 1
+        return n
+
+    if regions:
+        done: set[str] = set()
+        for region in regions:
+            if region.sido in done:
+                continue
+            done.add(region.sido)
+            for code in region.codes:  # 코드 후보 중 결과가 나오는 것을 사용
+                crit = client.build_criteria(days_ahead=days_ahead, extra=extra, sido_code=code, **common)
+                if collect(crit):
+                    break
+        before = len(items)
+        items = {k: v for k, v in items.items() if any(r.matches(v) for r in regions)}
+        log.info("검색된 물건 %d건 중 지정 지역 %d건", before, len(items))
+    else:
+        for q in queries:
+            collect(client.build_criteria(days_ahead=days_ahead, extra=extra, **q))
+        log.info("검색된 물건 %d건", len(items))
 
     if dump:
         Path(dump).write_text(json.dumps(raw_rows, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -118,6 +152,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--dump", metavar="FILE", help="검색 원본 응답을 JSON 으로 저장")
     p.add_argument("--resend", action="store_true", help="이미 알린 물건도 포함해 조건에 맞는 물건 모두 다시 알림")
     p.add_argument("--test-notify", action="store_true", help="설정된 알림 채널로 테스트 메시지 전송")
+    p.add_argument(
+        "--regions",
+        default=os.environ.get("REGIONS") or None,
+        help="이번 실행에만 쓸 지역 (예: '대구, 부산 해운대구'). config 의 regions 보다 우선",
+    )
     p.add_argument("-v", "--verbose", action="store_true")
     args = p.parse_args(argv)
 
@@ -134,7 +173,14 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         failed = notify_all(notifiers, "✅ 경매 알리미 테스트 메시지입니다. 이 메시지가 보이면 설정 완료!")
         return 1 if failed else 0
-    return run(cfg, dry_run=args.dry_run, dump=args.dump, resend=args.resend)
+    try:
+        parse_regions(args.regions or cfg.get("regions"))  # 지역 이름 오류를 먼저 확인
+    except ValueError as e:
+        log.error("지역 설정 오류: %s", e)
+        return 2
+    return run(
+        cfg, dry_run=args.dry_run, dump=args.dump, resend=args.resend, regions_override=args.regions
+    )
 
 
 if __name__ == "__main__":
