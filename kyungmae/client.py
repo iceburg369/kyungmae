@@ -72,6 +72,10 @@ def _to_int(v: Any) -> int:
         return 0
 
 
+def _clean(v: Any) -> str:
+    return " ".join(str(v or "").split())
+
+
 def _fmt_date(v: Any) -> str:
     s = str(v or "").strip().replace(".", "").replace("-", "")
     if len(s) >= 8 and s[:8].isdigit():
@@ -94,14 +98,29 @@ def parse_item(raw: dict) -> AuctionItem:
         min_price=_to_int(_first(raw, "minmaePrice", "lwsDspslPrc", "notifyMinmaePrice1")),
         fail_count=_to_int(_first(raw, "yuchalCnt", "flbdNcnt", default=0)),
         sale_date=_fmt_date(_first(raw, "maeGiil", "dspslDxdyYmd", "dxdyYmd")),
-        area=str(_first(raw, "areaList", "pjbBuldList", "objctArDts")),
-        note=str(_first(raw, "mulBigo", "dspslGdsRmk", "rmk")),
+        area=_clean(_first(raw, "pjbBuldList", "areaList", "objctArDts")),
+        note=_clean(_first(raw, "mulBigo", "dspslGdsRmk", "rmk")),
         raw=raw,
     )
 
 
+# 사이트가 허용하는 페이지 크기 (5, 100 등은 400 오류)
+ALLOWED_PAGE_SIZES = (10, 20, 40)
+
+
 class CourtAuctionClient:
-    def __init__(self, timeout: float = 20.0, delay: float = 1.0, page_size: int = 40):
+    def __init__(
+        self,
+        timeout: float = 20.0,
+        delay: float = 1.0,
+        page_size: int = 40,
+        retries: int = 3,
+        retry_wait: float = 10.0,
+    ):
+        if page_size not in ALLOWED_PAGE_SIZES:
+            raise ValueError(f"page_size 는 {ALLOWED_PAGE_SIZES} 중 하나여야 합니다: {page_size}")
+        self.retries = retries
+        self.retry_wait = retry_wait
         self.timeout = timeout
         self.delay = delay  # 페이지 요청 사이 대기(초) – 서버 부담을 줄이기 위함
         self.page_size = page_size
@@ -189,7 +208,9 @@ class CourtAuctionClient:
             "lafjOrderBy": "",
             "pgmId": "PGJ151F01",
             "csNo": "",
-            "cortStDvs": "1",
+            # 1 = 법원 기준 검색, 2 = 소재지(시도/시군구) 기준 검색.
+            # 1 로 두면 시도 코드는 무시되고 전국 결과가 나온다.
+            "cortStDvs": "2" if (sido_code or sigungu_code) else "1",
             "statNum": 1,
             "bidBgngYmd": today.strftime("%Y%m%d"),
             "bidEndYmd": (today + timedelta(days=days_ahead)).strftime("%Y%m%d"),
@@ -234,12 +255,25 @@ class CourtAuctionClient:
             "SC-Pgmid": "PGJ151F01",
             "submissionid": "mf_wfm_mainFrame_sbm_selectGdsDtlSrch",
         }
-        resp = self.session.post(
-            BASE_URL + SEARCH_PATH, json=body, headers=headers, timeout=self.timeout
-        )
-        resp.raise_for_status()
-        payload = resp.json()
-        return extract_rows(payload)
+        for attempt in range(self.retries + 1):
+            try:
+                resp = self.session.post(
+                    BASE_URL + SEARCH_PATH, json=body, headers=headers, timeout=self.timeout
+                )
+                # 요청이 몰리면 400 + "잠시 후 다시 이용해 주십시오" 를 돌려준다.
+                if resp.status_code >= 500 or (resp.status_code == 400 and "잠시 후" in resp.text):
+                    raise requests.HTTPError(f"{resp.status_code}: {resp.text[:200]}", response=resp)
+                resp.raise_for_status()
+                return extract_rows(resp.json())
+            except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as e:
+                status = getattr(getattr(e, "response", None), "status_code", None)
+                retryable = status is None or status >= 500 or "잠시 후" in str(e)
+                if attempt >= self.retries or not retryable:
+                    raise
+                wait = self.retry_wait * (attempt + 1)
+                log.warning("검색 요청 실패(%s), %.0f초 후 재시도 %d/%d", e, wait, attempt + 1, self.retries)
+                time.sleep(wait)
+        raise AssertionError("unreachable")
 
     def search(self, criteria: dict, max_pages: int = 50) -> Iterator[dict]:
         """모든 페이지를 순회하며 원본 행을 하나씩 돌려준다."""

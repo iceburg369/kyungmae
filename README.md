@@ -90,7 +90,10 @@ watches:
   `python -m kyungmae --dry-run --dump raw.json -v` 로 원본 응답을 저장해 확인하고,
   요청 필드는 `search.extra_params`로 덮어쓸 수 있습니다. 응답 필드명 매핑은
   `kyungmae/client.py`의 `parse_item()`에 있습니다.
-- **전국 검색이 너무 오래 걸릴 때**: `search.queries`에 `sido_code`/`sigungu_code`를 지정해 범위를 줄이세요.
+- **검색이 너무 오래 걸릴 때**: `search.queries`에 `sido_code`, `usage_large`(건물 20000 / 토지 10000),
+  `min_price_max` 등 서버 검색 조건을 넣어 범위를 줄이세요. (서울 건물 2주치 ≈ 3,000건 ≈ 80페이지)
+- **"잠시 후 다시 이용해 주십시오" 오류**: 요청이 많을 때 사이트가 돌려주는 오류로, 자동으로 몇 번 재시도합니다.
+  자주 나면 `delay_seconds`를 늘리세요.
 - 사이트에 부담을 주지 않도록 하루 1~2회 정도만 실행하는 것을 권장합니다.
 
 ## 테스트
