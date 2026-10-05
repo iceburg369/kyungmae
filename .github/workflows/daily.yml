@@ -13,6 +13,11 @@ on:
           - normal        # 새 물건만 알림
           - test-notify   # 알림 채널 테스트 메시지만 보냄
           - resend        # 이미 알린 물건도 포함해 조건에 맞는 물건 모두 다시 알림
+      regions:
+        description: "이번 실행에만 쓸 지역 (예: 대구, 부산 해운대구). 비우면 config.yaml 의 regions 사용"
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: write           # 알림 기록(data/seen.json) 커밋용
@@ -46,6 +51,7 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           MODE: ${{ inputs.mode || 'normal' }}
+          REGIONS: ${{ inputs.regions }}
         run: |
           case "$MODE" in
             test-notify) python -m kyungmae -c config.yaml --test-notify ;;

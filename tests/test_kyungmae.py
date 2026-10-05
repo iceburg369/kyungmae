@@ -203,3 +203,60 @@ def test_test_notify_without_channel(tmp_path):
     cfg_path = tmp_path / "c.yaml"
     cfg_path.write_text("watches: [{name: a}]\nnotify: {console: true}\n", encoding="utf-8")
     assert main_mod.main(["-c", str(cfg_path), "--test-notify"]) == 1
+
+
+def test_parse_regions():
+    import pytest
+
+    from kyungmae.regions import parse_regions
+
+    rs = parse_regions("대구, 부산광역시 해운대구, 경기도 수원시 영통구")
+    assert [r.label for r in rs] == ["대구", "부산 해운대구", "경기 수원시 영통구"]
+    assert rs[0].codes == ("27",)
+    assert parse_regions(["강원"])[0].codes == ("51", "42")
+    assert parse_regions("") == []
+    with pytest.raises(ValueError):
+        parse_regions("대규")
+
+
+def test_region_matches():
+    from kyungmae.regions import parse_region
+
+    daegu = parse_item({**RAW, "printSt": "대구광역시 수성구 범어동 123 범어아파트 101동"})
+    gwangju_gg = parse_item({**RAW, "printSt": "경기도 광주시 양벌동 940-5"})
+    assert parse_region("대구").matches(daegu)
+    assert parse_region("대구 수성구").matches(daegu)
+    assert not parse_region("대구 달서구").matches(daegu)
+    assert not parse_region("광주").matches(gwangju_gg)  # 광주광역시 ≠ 경기도 광주시
+    assert parse_region("경기 광주시").matches(gwangju_gg)
+
+
+def test_run_with_regions(tmp_path, monkeypatch, capsys):
+    seen_codes = []
+    rows = [
+        {**RAW, "srnSaNo": "2026타경1", "printSt": "대구광역시 수성구 범어동 1"},
+        {**RAW, "srnSaNo": "2026타경2", "printSt": "대구광역시 달서구 월성동 2"},
+    ]
+
+    def fake_search(self, criteria, max_pages=50):
+        seen_codes.append((criteria["rprsAdongSdCd"], criteria["lclDspslGdsLstUsgCd"]))
+        yield from rows
+
+    monkeypatch.setattr(CourtAuctionClient, "search", fake_search)
+    cfg = {
+        "state_file": str(tmp_path / "seen.json"),
+        "regions": ["대구"],
+        "search": {"common": {"usage_large": "20000"}},
+        "watches": [{"name": "전체"}],
+        "notify": {"console": True},
+    }
+    main_mod.run(cfg, dry_run=True, regions_override="대구 수성구")
+    out = capsys.readouterr().out
+    assert seen_codes == [("27", "20000")]
+    assert "2026타경1" in out and "2026타경2" not in out
+
+
+def test_bad_region_name(tmp_path):
+    cfg_path = tmp_path / "c.yaml"
+    cfg_path.write_text("regions: [대규]\nwatches: [{name: a}]\n", encoding="utf-8")
+    assert main_mod.main(["-c", str(cfg_path)]) == 2
