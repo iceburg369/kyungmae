@@ -3,7 +3,16 @@ name: 경매 알리미 (매일)
 on:
   schedule:
     - cron: "0 23 * * *"   # 매일 08:00 KST (UTC 23:00)
-  workflow_dispatch: {}     # Actions 탭에서 수동 실행
+  workflow_dispatch:        # Actions 탭에서 수동 실행
+    inputs:
+      mode:
+        description: "실행 방식"
+        type: choice
+        default: normal
+        options:
+          - normal        # 새 물건만 알림
+          - test-notify   # 알림 채널 테스트 메시지만 보냄
+          - resend        # 이미 알린 물건도 포함해 조건에 맞는 물건 모두 다시 알림
 
 permissions:
   contents: write           # 알림 기록(data/seen.json) 커밋용
@@ -36,7 +45,13 @@ jobs:
           MAIL_TO: ${{ secrets.MAIL_TO }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: python -m kyungmae -c config.yaml
+          MODE: ${{ inputs.mode || 'normal' }}
+        run: |
+          case "$MODE" in
+            test-notify) python -m kyungmae -c config.yaml --test-notify ;;
+            resend)      python -m kyungmae -c config.yaml --resend ;;
+            *)           python -m kyungmae -c config.yaml ;;
+          esac
 
       - name: 알림 기록 저장
         if: always()

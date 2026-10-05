@@ -20,7 +20,7 @@ import yaml
 
 from .client import CourtAuctionClient, parse_item
 from .filters import Watch
-from .notifier import build_notifiers, format_message, notify_all
+from .notifier import ConsoleNotifier, build_notifiers, format_message, notify_all
 from .store import SeenStore
 
 log = logging.getLogger("kyungmae")
@@ -39,6 +39,10 @@ def _expand_env(obj):
     return obj
 
 
+def _has_remote(notifiers: list) -> bool:
+    return any(not isinstance(n, ConsoleNotifier) for n in notifiers)
+
+
 def load_config(path: str | Path) -> dict:
     with open(path, encoding="utf-8") as f:
         cfg = yaml.safe_load(f) or {}
@@ -48,7 +52,7 @@ def load_config(path: str | Path) -> dict:
     return cfg
 
 
-def run(cfg: dict, dry_run: bool = False, dump: str | None = None) -> int:
+def run(cfg: dict, dry_run: bool = False, dump: str | None = None, resend: bool = False) -> int:
     search_cfg = cfg.get("search") or {}
     days_ahead = int(search_cfg.get("days_ahead", 14))
     queries = search_cfg.get("queries") or [{}]
@@ -78,7 +82,7 @@ def run(cfg: dict, dry_run: bool = False, dump: str | None = None) -> int:
     matches: dict[str, list] = {}
     new_items = []
     for item in sorted(items.values(), key=lambda i: (i.sale_date, i.court, i.case_no)):
-        if not store.is_new(item.uid, item.min_price):
+        if not resend and not store.is_new(item.uid, item.min_price):
             continue
         hit = [w.name for w in watches if w.matches(item)]
         for name in hit:
@@ -96,7 +100,10 @@ def run(cfg: dict, dry_run: bool = False, dump: str | None = None) -> int:
         log.info("dry-run: 알림을 보내지 않고 상태도 저장하지 않습니다.")
         return 0
 
-    failed = notify_all(build_notifiers(cfg.get("notify") or {}), text)
+    notifiers = build_notifiers(cfg.get("notify") or {})
+    if not _has_remote(notifiers):
+        log.warning("텔레그램/이메일 등 알림 채널이 설정되지 않아 화면(로그)에만 출력합니다.")
+    failed = notify_all(notifiers, text)
     for item in new_items:
         store.add(item.uid, item.min_price, item.sale_date)
     store.save()
@@ -109,6 +116,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("-c", "--config", default="config.yaml")
     p.add_argument("--dry-run", action="store_true", help="알림/상태저장 없이 결과만 출력")
     p.add_argument("--dump", metavar="FILE", help="검색 원본 응답을 JSON 으로 저장")
+    p.add_argument("--resend", action="store_true", help="이미 알린 물건도 포함해 조건에 맞는 물건 모두 다시 알림")
     p.add_argument("--test-notify", action="store_true", help="설정된 알림 채널로 테스트 메시지 전송")
     p.add_argument("-v", "--verbose", action="store_true")
     args = p.parse_args(argv)
@@ -120,9 +128,13 @@ def main(argv: list[str] | None = None) -> int:
     cfg = load_config(args.config)
 
     if args.test_notify:
-        failed = notify_all(build_notifiers(cfg.get("notify") or {}), "✅ 경매 알리미 테스트 메시지")
+        notifiers = build_notifiers(cfg.get("notify") or {})
+        if not _has_remote(notifiers):
+            log.error("설정된 알림 채널이 없습니다. TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID 등을 확인하세요.")
+            return 1
+        failed = notify_all(notifiers, "✅ 경매 알리미 테스트 메시지입니다. 이 메시지가 보이면 설정 완료!")
         return 1 if failed else 0
-    return run(cfg, dry_run=args.dry_run, dump=args.dump)
+    return run(cfg, dry_run=args.dry_run, dump=args.dump, resend=args.resend)
 
 
 if __name__ == "__main__":
