@@ -143,3 +143,41 @@ def test_retry_on_busy(monkeypatch):
     monkeypatch.setattr(c.session, "post", fake_post)
     rows, total = c.search_page(c.build_criteria(), 1)
     assert len(calls) == 2 and total == 1
+
+
+def test_usage_strict_by_default():
+    raw = {**RAW, "dspslUsgNm": "단독주택다가구", "printSt": "경기도 양주시 삼숭동 688 양주자이아파트 603동"}
+    item = parse_item(raw)
+    assert not Watch(name="a", usage_keywords=["아파트"]).matches(item)
+    assert Watch(name="b", usage_keywords=["아파트"], usage_in_address=True).matches(item)
+
+
+def test_exclude_risks():
+    import pytest
+
+    note = "매수인에게 대항할 수 있는 임차인 있음, 배당에서 보증금이 전액 변제되지 아니하면 잔액을 매수인이 인수함."
+    item = parse_item({**RAW, "mulBigo": note})
+    assert Watch(name="a").matches(item)
+    assert not Watch(name="b", exclude_risks=["대항력임차인"]).matches(item)
+    assert Watch(name="c", exclude_risks=["유치권", "지분매각"]).matches(item)
+    with pytest.raises(ValueError):
+        Watch(name="d", exclude_risks=["없는항목"])
+
+
+def test_area_and_sale_window():
+    item = parse_item({**RAW, "pjbBuldList": "철근콘크리트조\r\n84.92㎡"})
+    assert item.area_m2 == 84.92
+    assert Watch(name="a", area_min=59, area_max=85).matches(item)
+    assert not Watch(name="b", area_max=60).matches(item)
+    assert not Watch(name="c", area_min=59).matches(parse_item({**RAW, "pjbBuldList": ""}))
+    today = date(2026, 10, 5)  # RAW 매각기일 2026-10-20
+    assert Watch(name="d", sale_within_days=15).matches(item, today=today)
+    assert not Watch(name="e", sale_within_days=7).matches(item, today=today)
+
+
+def test_ratio_and_court_and_fail_max():
+    item = parse_item(RAW)  # 80%, 유찰 1회, 서울중앙지방법원
+    assert not Watch(name="a", min_ratio=90).matches(item)
+    assert Watch(name="b", courts=["서울중앙"]).matches(item)
+    assert not Watch(name="c", courts=["수원"]).matches(item)
+    assert not Watch(name="d", fail_count_max=0).matches(item)
