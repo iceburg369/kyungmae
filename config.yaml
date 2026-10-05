@@ -34,27 +34,49 @@ search:
 
 # 2단계: 내가 원하는 물건 조건 (여러 개 가능, 하나라도 맞으면 알림)
 # 모든 항목은 선택사항이며, 적은 항목은 모두 만족해야(AND) 합니다.
+# 쓰지 않을 항목은 지우거나 앞에 # 을 붙이면 꺼집니다.
+#
 #   address_keywords : 주소에 이 중 하나라도 포함
 #   usage_keywords   : 용도(아파트, 다세대, 오피스텔, 대지, 전 ...) 중 하나라도 포함
-#   exclude_keywords : 주소/용도/비고에 포함되면 제외 (예: 지분, 유치권)
+#   usage_in_address : true 면 용도가 달라도 주소·건물명에 키워드가 있으면 포함 (기본 false)
+#   courts           : 담당 법원 이름 일부 (예: [서울중앙, 수원])
+#   exclude_keywords : 주소/용도/비고에 이 문구가 있으면 제외 (자유 입력)
+#   exclude_risks    : 위험 물건 제외 (아래에서 골라 쓰기)
+#       대항력임차인, 선순위권리, 지분매각, 유치권, 법정지상권,
+#       대지권미등기, 토지별도등기, 위반건축물, 재매각, 분묘기지권
 #   appraisal_min/max: 감정가 범위 (원)
 #   min_price_min/max: 최저매각가 범위 (원)
-#   fail_count_min   : 최소 유찰 횟수
-#   max_ratio        : 최저가/감정가 비율(%) 이하
+#   fail_count_min/max: 유찰 횟수 범위
+#   min_ratio/max_ratio: 최저가/감정가 비율(%) 범위
+#   area_min/max     : 면적(㎡) 범위 (예: 59 ~ 85)
+#   sale_within_days : 매각기일이 오늘부터 N일 안인 것만
 watches:
   - name: 강남3구 아파트 (유찰 1회 이상)
     address_keywords: [강남구, 서초구, 송파구]
     usage_keywords: [아파트]
-    exclude_keywords: [지분, 유치권, 법정지상권]
+    exclude_risks: &safe
+      - 대항력임차인
+      - 선순위권리
+      - 지분매각
+      - 유치권
+      - 법정지상권
+      - 대지권미등기
+      - 토지별도등기
+      - 위반건축물
+      - 재매각
     fail_count_min: 1
     min_price_max: 1500000000
+    # area_min: 59
+    # area_max: 85
 
   - name: 경기 3억 이하 아파트 반값
     address_keywords: [경기]
     usage_keywords: [아파트]
-    exclude_keywords: [지분]
+    exclude_risks: *safe        # 위와 같은 위험 제외 목록 사용
     min_price_max: 300000000
     max_ratio: 50
+    # area_min: 59
+    # area_max: 85
 
 # 알림 채널 (값이 비어 있는 채널은 자동으로 꺼집니다)
 notify:

@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -48,6 +49,17 @@ class AuctionItem:
     @property
     def uid(self) -> str:
         return f"{self.court}|{self.case_no}|{self.item_no}"
+
+    @property
+    def area_m2(self) -> float:
+        """면적(㎡). 여러 개면 가장 큰 값, 알 수 없으면 0."""
+        nums = [float(n) for n in re.findall(r"([\d.]+)\s*㎡", self.area)]
+        if nums:
+            return max(nums)
+        try:
+            return float(self.raw.get("maxArea") or 0)
+        except ValueError:
+            return 0.0
 
     @property
     def ratio(self) -> float:
