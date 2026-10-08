@@ -58,6 +58,15 @@ python -m kyungmae
 - **Windows** — 작업 스케줄러 → 기본 작업 만들기 → 매일 08:00 →
   프로그램 `python`, 인수 `-m kyungmae`, 시작 위치 `C:\경로\kyungmae`
 
+### 방법 C. Vercel 웹 페이지 (지금 조건에 맞는 물건 바로 보기)
+
+GitHub 저장소를 Vercel에 연결하면 `https://<프로젝트>.vercel.app/` 에서 현재 조건에 맞는 물건을 볼 수 있습니다.
+`?regions=대구 수성구` 처럼 주소 뒤에 붙이면 그 지역만 조회합니다.
+
+- 진입점은 `api/index.py`, 설정은 `vercel.json` 입니다.
+- 서울 리전(`icn1`)에서 실행되므로 해외 IP 차단을 피할 수 있습니다.
+- 이 페이지는 **조회만** 하고 알림을 보내거나 `data/seen.json`을 기록하지 않습니다 (Vercel은 파일 저장 불가).
+
 ## 텔레그램으로 받기 (단계별)
 
 1. 텔레그램에서 **@BotFather** 검색 → 대화 시작 → `/newbot` 입력

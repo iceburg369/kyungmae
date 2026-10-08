@@ -53,13 +53,13 @@ def load_config(path: str | Path) -> dict:
     return cfg
 
 
-def run(
+def find_matches(
     cfg: dict,
-    dry_run: bool = False,
     dump: str | None = None,
     resend: bool = False,
     regions_override: str | None = None,
-) -> int:
+) -> tuple[dict[str, list], list, SeenStore]:
+    """검색 → 조건 필터 → (resend 가 아니면) 중복 제거까지 하고 결과를 돌려준다."""
     search_cfg = cfg.get("search") or {}
     days_ahead = int(search_cfg.get("days_ahead", 14))
     extra = search_cfg.get("extra_params") or {}
@@ -123,7 +123,19 @@ def run(
             matches.setdefault(name, []).append(item)
         if hit:
             new_items.append(item)
+    return matches, new_items, store
 
+
+def run(
+    cfg: dict,
+    dry_run: bool = False,
+    dump: str | None = None,
+    resend: bool = False,
+    regions_override: str | None = None,
+) -> int:
+    matches, new_items, store = find_matches(
+        cfg, dump=dump, resend=resend, regions_override=regions_override
+    )
     if not new_items:
         log.info("조건에 맞는 새 물건이 없습니다.")
         return 0
