@@ -2,7 +2,8 @@ name: 경매 알리미 (매일)
 
 on:
   schedule:
-    - cron: "0 23 * * *"   # 매일 08:00 KST (UTC 23:00)
+    # 정각(00분)은 GitHub 서버가 붐벼 몇 시간씩 밀리므로 일부러 어긋난 시각으로 예약
+    - cron: "17 22 * * *"  # 매일 07:17 KST (UTC 22:17)
   workflow_dispatch:        # Actions 탭에서 수동 실행
     inputs:
       mode:
@@ -28,12 +29,12 @@ concurrency:
 
 jobs:
   run:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04     # 10/19 ubuntu-latest 가 26으로 바뀌어도 영향 없도록 고정
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -65,4 +66,18 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/seen.json 2>/dev/null || true
-          git diff --cached --quiet || (git commit -m "chore: 알림 기록 갱신" && git push)
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: 알림 기록 갱신"
+          elif [ $(( $(date +%s) - $(git log -1 --format=%ct) )) -gt $((45*86400)) ]; then
+            # 저장소에 60일간 커밋이 없으면 GitHub 가 예약 실행을 자동으로 끕니다.
+            # 새 물건이 오래 없더라도 꺼지지 않도록 45일마다 빈 커밋을 남깁니다.
+            git commit --allow-empty -m "chore: 예약 실행 유지 (keepalive)"
+          else
+            exit 0
+          fi
+          # 그사이 config.yaml 등을 고쳤어도 push 가 실패하지 않도록 최신 내용 위에 올림
+          for i in 1 2 3; do
+            git pull --rebase origin "${GITHUB_REF_NAME}" && git push && exit 0
+            sleep 5
+          done
+          exit 1
