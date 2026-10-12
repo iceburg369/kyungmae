@@ -77,6 +77,7 @@ watches:
 # 알림 채널 (값이 비어 있는 채널은 자동으로 꺼집니다)
 notify:
   console: true
+  send_empty: true    # 새 물건이 없어도 '조회 완료' 메시지 보내기 (끄려면 false)
   telegram:
     bot_token: ${TELEGRAM_BOT_TOKEN}
     chat_id: ${TELEGRAM_CHAT_ID}

@@ -260,3 +260,34 @@ def test_bad_region_name(tmp_path):
     cfg_path = tmp_path / "c.yaml"
     cfg_path.write_text("regions: [대규]\nwatches: [{name: a}]\n", encoding="utf-8")
     assert main_mod.main(["-c", str(cfg_path)]) == 2
+
+
+def test_empty_result_still_notifies(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(CourtAuctionClient, "search", lambda self, c, max_pages=50: iter([]))
+    cfg = {
+        "state_file": str(tmp_path / "seen.json"),
+        "search": {"queries": [{}]},
+        "watches": [{"name": "w"}],
+        "notify": {"console": True},
+    }
+    assert main_mod.run(cfg) == 0
+    assert "새 물건은 없습니다" in capsys.readouterr().out
+    cfg["notify"]["send_empty"] = False
+    assert main_mod.run(cfg) == 0
+    assert "새 물건은 없습니다" not in capsys.readouterr().out
+
+
+def test_failure_notifies(tmp_path, monkeypatch, capsys):
+    def boom(self, c, max_pages=50):
+        raise RuntimeError("사이트 오류")
+        yield
+
+    monkeypatch.setattr(CourtAuctionClient, "search", boom)
+    cfg_path = tmp_path / "c.yaml"
+    cfg_path.write_text(
+        f"state_file: {tmp_path / 's.json'}\nsearch: {{queries: [{{}}]}}\n"
+        "watches: [{name: w}]\nnotify: {console: true}\n",
+        encoding="utf-8",
+    )
+    assert main_mod.main(["-c", str(cfg_path)]) == 1
+    assert "조회 실패" in capsys.readouterr().out

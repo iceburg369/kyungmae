@@ -14,6 +14,7 @@ import logging
 import os
 import re
 import sys
+from datetime import date
 from pathlib import Path
 
 import yaml
@@ -126,6 +127,16 @@ def run(
 
     if not new_items:
         log.info("조건에 맞는 새 물건이 없습니다.")
+        # 실행됐는지 알 수 있도록 '새 물건 없음'도 알린다 (config: notify.send_empty: false 로 끄기)
+        notify_cfg = cfg.get("notify") or {}
+        if not dry_run and notify_cfg.get("send_empty", True):
+            area = ", ".join(r.label for r in regions) if regions else "설정한 조건"
+            notify_all(
+                build_notifiers(notify_cfg),
+                f"✅ 경매 알리미 {date.today():%m/%d} 조회 완료\n"
+                f"지역: {area}\n"
+                f"매각 예정 물건 {len(items)}건 중 조건에 맞는 새 물건은 없습니다.",
+            )
         return 0
 
     text = format_message(matches)
@@ -178,9 +189,19 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as e:
         log.error("지역 설정 오류: %s", e)
         return 2
-    return run(
-        cfg, dry_run=args.dry_run, dump=args.dump, resend=args.resend, regions_override=args.regions
-    )
+    try:
+        return run(
+            cfg, dry_run=args.dry_run, dump=args.dump, resend=args.resend, regions_override=args.regions
+        )
+    except Exception as e:
+        # 사이트 차단·개편 등으로 조회가 실패하면 조용히 끝나지 않도록 알린다
+        log.exception("실행 실패")
+        if not args.dry_run:
+            notify_all(
+                build_notifiers(cfg.get("notify") or {}),
+                f"⚠️ 경매 알리미 {date.today():%m/%d} 조회 실패\n{type(e).__name__}: {str(e)[:300]}",
+            )
+        return 1
 
 
 if __name__ == "__main__":
