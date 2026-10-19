@@ -14,6 +14,7 @@ from email.utils import formataddr
 import requests
 
 from .client import AuctionItem
+from .filters import detect_risks
 
 log = logging.getLogger(__name__)
 
@@ -43,7 +44,26 @@ def format_item(item: AuctionItem) -> str:
         lines.append(f"  면적: {item.area}")
     if item.note:
         lines.append(f"  비고: {item.note[:200]}")
+    risks = detect_risks(item)
+    if risks:
+        lines.append(f"  ⚠ 주의: {', '.join(risks)}")
     return "\n".join(lines)
+
+
+def format_list(title: str, items: list[AuctionItem]) -> str:
+    """조건 없이 지역의 전체 물건 목록."""
+    parts = [f"📋 {title} 경매 물건 {len(items)}건"]
+    if not items:
+        parts.append("매각 예정인 물건이 없습니다.")
+    by_usage: dict[str, list[AuctionItem]] = {}
+    for i in items:
+        by_usage.setdefault(i.usage or "기타", []).append(i)
+    for usage, group in by_usage.items():
+        parts.append(f"\n■ {usage} ({len(group)}건)")
+        parts.extend(format_item(i) for i in group)
+    if items:
+        parts.append(f"\n상세 조회: {DETAIL_URL} (사건번호로 검색)")
+    return "\n".join(parts)
 
 
 def format_message(matches: dict[str, list[AuctionItem]]) -> str:

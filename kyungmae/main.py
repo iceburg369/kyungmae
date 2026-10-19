@@ -21,7 +21,7 @@ import yaml
 
 from .client import CourtAuctionClient, parse_item
 from .filters import Watch
-from .notifier import ConsoleNotifier, build_notifiers, format_message, notify_all
+from .notifier import ConsoleNotifier, build_notifiers, format_list, format_message, notify_all
 from .regions import parse_regions
 from .store import SeenStore
 
@@ -60,9 +60,11 @@ def run(
     dump: str | None = None,
     resend: bool = False,
     regions_override: str | None = None,
+    list_all: bool = False,
+    days_override: int | None = None,
 ) -> int:
     search_cfg = cfg.get("search") or {}
-    days_ahead = int(search_cfg.get("days_ahead", 14))
+    days_ahead = days_override or int(search_cfg.get("days_ahead", 14))
     extra = search_cfg.get("extra_params") or {}
     max_pages = int(search_cfg.get("max_pages", 50))
 
@@ -114,9 +116,22 @@ def run(
         Path(dump).write_text(json.dumps(raw_rows, ensure_ascii=False, indent=1), encoding="utf-8")
         log.info("원본 응답을 %s 에 저장했습니다.", dump)
 
+    ordered = sorted(items.values(), key=lambda i: (i.sale_date, i.court, i.case_no))
+
+    if list_all:
+        # 알림 조건·기록과 상관없이 지역의 전체 물건 목록만 보낸다 (기록은 저장하지 않음)
+        title = ", ".join(r.label for r in regions) if regions else "전체"
+        text = format_list(f"{title} ({days_ahead}일 이내)", ordered)
+        if dry_run:
+            print(text)
+            return 0
+        failed = notify_all(build_notifiers(cfg.get("notify") or {}), text)
+        log.info("목록 %d건 전송 (실패 채널 %d개)", len(ordered), failed)
+        return 1 if failed else 0
+
     matches: dict[str, list] = {}
     new_items = []
-    for item in sorted(items.values(), key=lambda i: (i.sale_date, i.court, i.case_no)):
+    for item in ordered:
         if not resend and not store.is_new(item.uid, item.min_price):
             continue
         hit = [w.name for w in watches if w.matches(item)]
@@ -162,6 +177,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--dry-run", action="store_true", help="알림/상태저장 없이 결과만 출력")
     p.add_argument("--dump", metavar="FILE", help="검색 원본 응답을 JSON 으로 저장")
     p.add_argument("--resend", action="store_true", help="이미 알린 물건도 포함해 조건에 맞는 물건 모두 다시 알림")
+    p.add_argument("--list", action="store_true", help="알림 조건 없이 지역의 전체 물건 목록 보내기 (위험 항목 표시)")
+    p.add_argument(
+        "--days",
+        type=int,
+        default=int(os.environ["DAYS"]) if os.environ.get("DAYS", "").isdigit() else None,
+        help="이번 실행에만 쓸 조회 기간(일). config 의 days_ahead 보다 우선",
+    )
     p.add_argument("--test-notify", action="store_true", help="설정된 알림 채널로 테스트 메시지 전송")
     p.add_argument(
         "--regions",
@@ -191,7 +213,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         return run(
-            cfg, dry_run=args.dry_run, dump=args.dump, resend=args.resend, regions_override=args.regions
+            cfg,
+            dry_run=args.dry_run,
+            dump=args.dump,
+            resend=args.resend,
+            regions_override=args.regions,
+            list_all=args.list,
+            days_override=args.days,
         )
     except Exception as e:
         # 사이트 차단·개편 등으로 조회가 실패하면 조용히 끝나지 않도록 알린다

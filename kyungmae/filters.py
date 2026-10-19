@@ -32,6 +32,12 @@ def _contains_any(text: str, words: list[str]) -> bool:
     return any(_norm(w) in t for w in words)
 
 
+def detect_risks(item: AuctionItem) -> list[str]:
+    """주소/용도/물건비고에서 찾은 위험 항목 이름 목록."""
+    text = f"{item.address} {item.usage} {item.note}"
+    return [name for name, words in RISK_KEYWORDS.items() if _contains_any(text, words)]
+
+
 @dataclass
 class Watch:
     """알림 조건 하나. 여러 개를 등록할 수 있다."""
