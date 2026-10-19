@@ -321,3 +321,13 @@ def test_list_mode_ignores_watches_and_seen(tmp_path, monkeypatch, capsys):
     assert not seen.exists()  # 목록 모드는 기록을 남기지 않음
     start, end = days_seen[0]
     assert (date(int(end[:4]), int(end[4:6]), int(end[6:])) - date(int(start[:4]), int(start[4:6]), int(start[6:]))).days == 30
+
+
+def test_risk_unclear_tenant():
+    from kyungmae.filters import detect_risks
+
+    note = "1.통칭 '해성빌라 B동'임 2.임대차관계 미상의 대항력 여지 있는 전입자 있음"
+    assert "대항력임차인" in detect_risks(parse_item({**RAW, "mulBigo": note}))
+    # 대항력을 포기한다는 확약서는 위험으로 보지 않음
+    waived = "임차보증금에 대하여 우선변제권만 주장하고 대항력은 포기하며"
+    assert "대항력임차인" not in detect_risks(parse_item({**RAW, "mulBigo": waived}))
