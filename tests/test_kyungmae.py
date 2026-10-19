@@ -291,3 +291,33 @@ def test_failure_notifies(tmp_path, monkeypatch, capsys):
     )
     assert main_mod.main(["-c", str(cfg_path)]) == 1
     assert "조회 실패" in capsys.readouterr().out
+
+
+def test_list_mode_ignores_watches_and_seen(tmp_path, monkeypatch, capsys):
+    note = "매수인에게 대항할 수 있는 임차인 있음"
+    rows = [
+        {**RAW, "srnSaNo": "2026타경1", "printSt": "대구광역시 달서구 송현동 1 송현아파트", "mulBigo": note},
+        {**RAW, "srnSaNo": "2026타경2", "printSt": "대구광역시 달서구 송현동 2", "dspslUsgNm": "다세대"},
+        {**RAW, "srnSaNo": "2026타경3", "printSt": "대구광역시 달서구 상인동 3"},
+    ]
+    days_seen = []
+
+    def fake_search(self, criteria, max_pages=50):
+        days_seen.append((criteria["bidBgngYmd"], criteria["bidEndYmd"]))
+        yield from rows
+
+    monkeypatch.setattr(CourtAuctionClient, "search", fake_search)
+    seen = tmp_path / "seen.json"
+    cfg = {
+        "state_file": str(seen),
+        "watches": [{"name": "아파트", "usage_keywords": ["아파트"], "exclude_risks": ["대항력임차인"]}],
+        "notify": {"console": True},
+    }
+    assert main_mod.run(cfg, regions_override="대구 달서구 송현동", list_all=True, days_override=30) == 0
+    out = capsys.readouterr().out
+    assert "2026타경1" in out and "2026타경2" in out and "2026타경3" not in out
+    assert "⚠ 주의: 대항력임차인" in out
+    assert "물건 2건" in out
+    assert not seen.exists()  # 목록 모드는 기록을 남기지 않음
+    start, end = days_seen[0]
+    assert (date(int(end[:4]), int(end[4:6]), int(end[6:])) - date(int(start[:4]), int(start[4:6]), int(start[6:]))).days == 30
